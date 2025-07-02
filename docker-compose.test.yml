@@ -1,0 +1,16 @@
+version: '3.9'
+services:
+  test-db:
+    image: postgres:15
+    container_name: elovote_test_db
+    environment:
+      POSTGRES_DB: elovote_test
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpassword
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testuser -d elovote_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 10 
