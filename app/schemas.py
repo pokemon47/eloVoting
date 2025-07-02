@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, List
+from typing import Optional, List, Union
 from uuid import UUID
 from datetime import datetime
 
@@ -68,4 +68,12 @@ class GlobalScoreOut(BaseModel):
     total_score: float
 
     class Config:
-        from_attributes = True 
+        from_attributes = True
+
+class LeaderboardEntry(BaseModel):
+    label: str
+    score: float
+    rank: Union[int, str]  # int for ranked, 'NA' for no votes
+
+class LeaderboardResponse(BaseModel):
+    leaderboard: list[LeaderboardEntry] 
