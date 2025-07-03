@@ -3,10 +3,11 @@ from sqlalchemy import select
 from typing import Optional, List
 from app.models import Poll, Option, VoterSession, MatchResult, GlobalScore
 from app.schemas import PollCreate, OptionCreate, VoterSessionCreate, MatchResultCreate
+from sqlalchemy.dialects.postgresql import insert
 
 # Poll CRUDso 
 async def create_poll(*, poll: PollCreate, session: AsyncSession) -> Poll:
-    db_poll = Poll(**poll.dict())
+    db_poll = Poll(**poll.model_dump())
     session.add(db_poll)
     await session.commit()
     await session.refresh(db_poll)
@@ -22,7 +23,7 @@ async def list_polls(session: AsyncSession) -> List[Poll]:
 
 # Option CRUD
 async def create_option(*, option: OptionCreate, session: AsyncSession) -> Option:
-    db_option = Option(**option.dict())
+    db_option = Option(**option.model_dump())
     session.add(db_option)
     await session.commit()
     await session.refresh(db_option)
@@ -38,7 +39,7 @@ async def list_options_by_poll(*, poll_id, session: AsyncSession) -> List[Option
 
 # VoterSession CRUD
 async def create_voter_session(*, session_data: VoterSessionCreate, session: AsyncSession) -> VoterSession:
-    db_session = VoterSession(**session_data.dict())
+    db_session = VoterSession(**session_data.model_dump())
     session.add(db_session)
     await session.commit()
     await session.refresh(db_session)
@@ -50,7 +51,7 @@ async def get_voter_session_by_id(*, session_id, session: AsyncSession) -> Optio
 
 # MatchResult CRUD
 async def create_match_result(*, match: MatchResultCreate, session: AsyncSession) -> MatchResult:
-    db_match = MatchResult(**match.dict())
+    db_match = MatchResult(**match.model_dump())
     session.add(db_match)
     await session.commit()
     await session.refresh(db_match)
@@ -61,23 +62,19 @@ async def list_match_results_by_session(*, session_id, session: AsyncSession) ->
     return list(result.scalars().all())
 
 # GlobalScore CRUD
-async def upsert_global_score(*, poll_id, option_id, delta: float, batch_size: int, session: AsyncSession) -> GlobalScore:
-    result = await session.execute(select(GlobalScore).where(
-        (GlobalScore.poll_id == poll_id) & (GlobalScore.option_id == option_id)
-    ))
-    score = result.scalar_one_or_none()
-    if score:
-        score.total_score += delta
-    else:
-        score = GlobalScore(poll_id=poll_id, option_id=option_id, total_score=delta)
-        session.add(score)
-    
-    # Commit immediately for batch_size=1, or accumulate for larger batches
-    if batch_size == 1:
-        await session.commit()
-        await session.refresh(score)
-    
-    return score
+async def upsert_global_score(*, poll_id, option_id, total_score, session: AsyncSession):
+    stmt = insert(GlobalScore).values(
+        poll_id=poll_id,
+        option_id=option_id,
+        total_score=total_score
+    ).on_conflict_do_update(
+        index_elements=[GlobalScore.poll_id, GlobalScore.option_id],
+        set_={
+            'total_score': GlobalScore.total_score + total_score
+        }
+    )
+    await session.execute(stmt)
+    await session.commit()
 
 async def list_global_scores_by_poll(*, poll_id, session: AsyncSession) -> List[GlobalScore]:
     result = await session.execute(select(GlobalScore).where(GlobalScore.poll_id == poll_id))

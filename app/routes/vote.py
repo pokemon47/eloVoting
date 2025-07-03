@@ -84,8 +84,7 @@ async def complete_voter_session(
         await upsert_global_score(
             poll_id=voter_session.poll_id,
             option_id=option.id,
-            delta=normalized_score,
-            batch_size=1,
+            total_score=normalized_score,
             session=session
         )
     

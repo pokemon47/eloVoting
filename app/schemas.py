@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import Optional, List, Union
 from uuid import UUID
 from datetime import datetime
@@ -14,9 +14,7 @@ class PollOut(PollBase):
     id: UUID
     is_verified: bool
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class OptionBase(BaseModel):
     label: str
@@ -27,9 +25,7 @@ class OptionCreate(OptionBase):
 class OptionOut(OptionBase):
     id: UUID
     poll_id: UUID
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class VoterSessionBase(BaseModel):
     poll_id: UUID
@@ -43,9 +39,7 @@ class VoterSessionOut(VoterSessionBase):
     is_complete: bool
     started_at: datetime
     completed_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class MatchResultBase(BaseModel):
     session_id: UUID
@@ -58,17 +52,13 @@ class MatchResultCreate(MatchResultBase):
 
 class MatchResultOut(MatchResultBase):
     id: UUID
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class GlobalScoreOut(BaseModel):
     poll_id: UUID
     option_id: UUID
     total_score: float
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class LeaderboardEntry(BaseModel):
     label: str

@@ -27,7 +27,7 @@ def mean_center(scores: List[float]) -> List[float]:
     mean = sum(scores) / len(scores) if scores else 0.0
     return [s - mean for s in scores]
 
-def process_session_elo(match_results: List[MatchResult], options: List[Option]) -> List[float]:]
+def process_session_elo(match_results: List[MatchResult], options: List[Option]) -> List[float]:
     # TODO: think of the security imporvements that could be made around this.
     """
     Process all match results for a session and return final Elo scores for all options.

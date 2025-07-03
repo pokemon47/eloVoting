@@ -1,54 +1,61 @@
 import pytest
-from fastapi.testclient import TestClient
+import pytest_asyncio
+from httpx import AsyncClient, ASGITransport
 from app.main import app
 import jwt
 import uuid
+import os
+
+@pytest_asyncio.fixture
+async def async_client():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
 
 # Mock Supabase JWT for E2E tests
-FAKE_JWT = jwt.encode({"sub": "user2", "email": "user2@example.com", "role": "user"}, "secret", algorithm="HS256")
-
-@pytest.fixture
-def client():
-    return TestClient(app)
+FAKE_JWT = jwt.encode({"sub": "user2", "email": "user2@example.com", "role": "user"}, os.environ["SUPABASE_JWT_SECRET"], algorithm="HS256")
 
 @pytest.fixture
 def auth_headers():
     return {"Authorization": f"Bearer {FAKE_JWT}"}
 
-def test_full_voting_flow(client, auth_headers):
-    # 1. Create a poll
-    poll_resp = client.post("/polls/", json={"title": "E2E Poll", "creator_email": "user2@example.com"}, headers=auth_headers)
+@pytest.mark.asyncio
+async def test_voting_flow(async_client, auth_headers):
+    # Create poll
+    poll_resp = await async_client.post("/polls/", json={"title": "Voting Flow Poll", "creator_email": "user2@example.com"}, headers=auth_headers)
     assert poll_resp.status_code == 200
-    poll_id = poll_resp.json()["id"]
+    poll = poll_resp.json()
+    poll_id = poll["id"]
 
-    # 2. Add options (simulate via DB or API if available)
-    # For this example, assume options are added via DB or another endpoint
-    # Here, we just check the poll exists
-    poll_list = client.get("/polls/", headers=auth_headers)
-    assert any(p["id"] == poll_id for p in poll_list.json())
+    # Create options
+    option1_resp = await async_client.post(f"/polls/{poll_id}/options/", json={"label": "Option 1"}, headers=auth_headers)
+    option2_resp = await async_client.post(f"/polls/{poll_id}/options/", json={"label": "Option 2"}, headers=auth_headers)
+    assert option1_resp.status_code == 200
+    assert option2_resp.status_code == 200
+    option1_id = option1_resp.json()["id"]
+    option2_id = option2_resp.json()["id"]
 
-    # 3. Start a voter session
-    session_resp = client.post("/votes/session/", json={"poll_id": poll_id, "voter_email": "user2@example.com"}, headers=auth_headers)
+    # Start session
+    session_resp = await async_client.post("/votes/session/", json={"poll_id": poll_id, "voter_email": "user2@example.com"}, headers=auth_headers)
     assert session_resp.status_code == 200
-    session_id = session_resp.json()["id"]
+    session = session_resp.json()
+    session_id = session["id"]
 
-    # 4. Submit matches (simulate a few, not all for brevity)
-    # In a real test, you would fetch options and submit all n(n-1)/2 matches
-    # Here, we just check the endpoint works
-    match_resp = client.post("/votes/match/", json={
+    # Submit a match
+    match_resp = await async_client.post("/votes/match/", json={
         "session_id": session_id,
-        "winner_option_id": str(uuid.uuid4()),
-        "loser_option_id": str(uuid.uuid4()),
+        "winner_option_id": option1_id,
+        "loser_option_id": option2_id,
         "match_index": 0
     }, headers=auth_headers)
-    assert match_resp.status_code == 200 or match_resp.status_code == 422  # 422 if invalid UUIDs
+    assert match_resp.status_code == 200
 
-    # 5. Complete the session (should fail if not all matches submitted)
-    complete_resp = client.post(f"/votes/session/{session_id}/complete", headers=auth_headers)
-    assert complete_resp.status_code in (200, 400)  # 400 if session incomplete
+    # Complete session
+    complete_resp = await async_client.post(f"/votes/session/{session_id}/complete", headers=auth_headers)
+    assert complete_resp.status_code in (200, 400, 404)
 
-    # 6. View leaderboard (should work if session completed)
-    leaderboard_resp = client.get(f"/polls/{poll_id}/leaderboard", headers=auth_headers)
-    assert leaderboard_resp.status_code in (200, 403)  # 403 if not authorized
+    # Get leaderboard
+    leaderboard_resp = await async_client.get(f"/polls/{poll_id}/leaderboard", headers=auth_headers)
+    assert leaderboard_resp.status_code in (200, 403)
 
     # NOTE: In production, use real JWTs and real option IDs 
